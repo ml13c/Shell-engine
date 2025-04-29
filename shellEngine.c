@@ -363,7 +363,10 @@ void run_shell(FILE *input, int interactive) {
         }
 
         parse_and_execute(line);
-    }
+        if (should_exit){
+           break;
+        }
+      }
 }
 
 int main(int argc, char *argv[]) {
