@@ -14,9 +14,9 @@ int should_exit = 0;
 char *path_list[MAX_PATHS];
 int path_count = 0;
 
-// === Signal Handler ===
+// === Signal Handler (Parent ignores Ctrl+C) ===
 void sigint_handler(int signo) {
-    printf("\n"); // Ignore Ctrl+C (refresh prompt nicely)
+    printf("\n");
 }
 
 // === Path Management ===
@@ -142,7 +142,7 @@ void execute_command_direct(char *cmd) {
 
     if (argc == 0) exit(1);
 
-    if (handle_builtin(args)) exit(0); // Built-ins processed here too
+    if (handle_builtin(args)) exit(0);
 
     if (redirect_in) {
         int fd = open(infile, O_RDONLY);
@@ -182,11 +182,18 @@ void run_single_command(char *cmd) {
         return;
     }
     if (pid == 0) {
-        setpgid(0, 0); // new process group
+        signal(SIGINT, SIG_DFL);  // Default Ctrl+C behavior in child
+        signal(SIGTSTP, SIG_DFL); // Default Ctrl+Z behavior in child
+        setpgid(0, 0);
         execute_command_direct(cmd);
     } else {
-        waitpid(pid, NULL, 0);
-    }
+        int status;
+        waitpid(pid, &status, WUNTRACED);
+        if(WIFSTOPPED(status)) {
+                kill(pid, SIGKILL);
+        }
+        freopen("/dev/tty", "r", stdin);
+        }
 }
 
 // === Piped Commands ===
@@ -218,6 +225,8 @@ void run_piped_commands(char *line) {
         }
 
         if (pid == 0) {
+            signal(SIGINT, SIG_DFL);
+            signal(SIGTSTP, SIG_DFL);
             setpgid(0, 0);
 
             if (input_fd != 0) {
