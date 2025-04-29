@@ -1,0 +1,6 @@
+ls -l
+pwd; whoami
+cd /tmp; ls
+echo Hello from batch mode!
+cd; pwd
+exit
