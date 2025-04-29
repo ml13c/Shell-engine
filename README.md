@@ -34,5 +34,5 @@ We implemented a custom `myhistory` built-in command to store the last 20 user-e
 
 ## Known Bugs
 - Our shell does not currently support simultaneous use of both input and output redirection in a single command.
-- When executing a history command using "myhistory -e N", if the original command involved redirection or pipelines, unexpected behavior may occur.
+- Re-executing a historical command involving complex piping or redirection may behave unexpectedly.
 - The PATH environment variable is modified during the shell's runtime, but not restored upon exit.
