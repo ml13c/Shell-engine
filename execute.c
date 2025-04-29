@@ -6,66 +6,13 @@
 #include <sys/wait.h>
 #include <signal.h>
 
-#define MAX_LINE 512
-#define MAX_ARGS 100
-#define MAX_PATHS 100
+#include "execute.h"
+#include "builtins.h"
+#include "path.h"
 
-int should_exit = 0;
-char *path_list[MAX_PATHS];
-int path_count = 0;
 
-// === Signal Handler ===
-void sigint_handler(int signo) {
-    printf("\n");
-    fflush(stdout);
-}
+extern int should_exit;
 
-// === Path Management ===
-void init_path() {
-    char *env_path = getenv("PATH");
-    if (!env_path) return;
-
-    char *copy = strdup(env_path);
-    char *token = strtok(copy, ":");
-    while (token && path_count < MAX_PATHS) {
-        path_list[path_count++] = strdup(token);
-        token = strtok(NULL, ":");
-    }
-    free(copy);
-}
-
-void print_path() {
-    for (int i = 0; i < path_count; i++) {
-        printf("%s", path_list[i]);
-        if (i < path_count - 1) printf(":");
-    }
-    printf("\n");
-}
-
-void add_path(const char *new_path) {
-    if (path_count < MAX_PATHS && new_path) {
-        path_list[path_count++] = strdup(new_path);
-    }
-}
-
-void remove_path(const char *target) {
-    if (!target) return;
-    int found = -1;
-    for (int i = 0; i < path_count; i++) {
-        if (strcmp(path_list[i], target) == 0) {
-            found = i;
-            free(path_list[i]);
-            break;
-        }
-    }
-    if (found != -1) {
-        for (int i = found; i < path_count - 1; i++) {
-            path_list[i] = path_list[i + 1];
-        }
-        path_count--;
-    }
-}
-// === Utility ===
 char *trim_whitespace(char *str) {
     while (*str == ' ' || *str == '\t') str++;
     if (*str == 0) return str;
@@ -74,46 +21,6 @@ char *trim_whitespace(char *str) {
         *end-- = '\0';
     }
     return str;
-}
-
-char *find_executable(char *cmd) {
-    static char full_path[MAX_LINE];
-    for (int i = 0; i < path_count; i++) {
-        snprintf(full_path, sizeof(full_path), "%s/%s", path_list[i], cmd);
-        if (access(full_path, X_OK) == 0) return full_path;
-    }
-    return NULL;
-}
-
-// === Built-in Command Handling ===
-int handle_builtin(char **args) {
-    if (strcmp(args[0], "cd") == 0) {
-        const char *path = args[1] ? args[1] : getenv("HOME");
-        if (chdir(path) != 0) perror("cd failed");
-        return 1;
-    }
-
-    if (strcmp(args[0], "exit") == 0) {
-        should_exit = 1;
-        return 1;
-    }
-
-    if (strcmp(args[0], "path") == 0) {
-        if (!args[1]) {
-            print_path();
-        } else if (strcmp(args[1], "+") == 0) {
-            if (args[2]) add_path(args[2]);
-            else fprintf(stderr, "Usage: path + <dir>\n");
-        } else if (strcmp(args[1], "-") == 0) {
-            if (args[2]) remove_path(args[2]);
-            else fprintf(stderr, "Usage: path - <dir>\n");
-        } else {
-            fprintf(stderr, "Usage: path [ + | - ] <dir>\n");
-        }
-        return 1;
-    }
-
-    return 0;
 }
 
 // === Command Execution ===
@@ -340,54 +247,4 @@ void parse_and_execute(char *line) {
 
         command = strtok(NULL, ";");
     }
-}
-
-void run_shell(FILE *input, int interactive) {
-    char line[MAX_LINE];
-    while (!should_exit) {
-        if (interactive) {
-            printf("myshell> ");
-            fflush(stdout);
-        }
-
-        if (!fgets(line, MAX_LINE, input)) break;
-
-        if (strlen(line) >= MAX_LINE - 1) {
-            fprintf(stderr, "Warning: input line too long\n");
-            continue;
-        }
-
-        if (!interactive) {
-            printf("%s", line);
-            fflush(stdout);
-        }
-
-        parse_and_execute(line);
-    }
-}
-
-int main(int argc, char *argv[]) {
-    FILE *input = stdin;
-    int interactive = 1;
-
-    if (argc == 2) {
-        input = fopen(argv[1], "r");
-        if (!input) {
-            perror("Batch file open error");
-            exit(1);
-        }
-        interactive = 0;
-    } else if (argc > 2) {
-        fprintf(stderr, "Usage: %s [batch_file]\n", argv[0]);
-        exit(1);
-    }
-
-    signal(SIGINT, sigint_handler);
-    signal(SIGTSTP, sigint_handler);
-
-    init_path();
-    run_shell(input, interactive);
-
-    if (input != stdin) fclose(input);
-    return 0;
 }
